@@ -3,16 +3,30 @@ import cv2
 import numpy as np
 
 #카메라 연결. input을 통한 카메라 연결은 추가 필요. 본인 얼굴 인식 프로그램
-video_capture = cv2.VideoCapture(0) #0은 인덱스값(카메라 번호)
+videofile = cv2.VideoCapture(0) #0은 인덱스값(카메라 번호)인데 0은 주로 노트북의 카메라
+
+if videofile.isOpened():
+    while True:
+        vret, img = videofile.read()
+        if vret:
+            cv2.imshow('webcam', img)
+            if cv2.waitKey(1) != -1: #원래는 0인데 영상이라 멈춰있으면 안 돼서 1ms를 기다리도록 설정
+                break
+        else:
+            print("프레임 정상적이지 않음")
+            break
+
+else :
+    print("오류 발생")
 
 #샘플을 불러와 인식하는 클래스
-class Sample:
-    def __init__(self, image_path):
-        self.image_path = image_path
-    
+class SampleImage:
+    def __init__(self, image):
+        self.image = image
+
     #image_path 경로에 있는 사진을 불러와 image에 저장한다.
     def load_image(self):
-        self.image = face_recognition.load_image_file(self.image_path) 
+        self.image = face_recognition.load_image_file(self.image)
     
     #image에 저장된 사진에서 얼굴을 인식하고 얼굴 인코딩을 face_encodings에 저장한다.
     #이때 인코딩은 정보가 코드화 된 것.
@@ -26,41 +40,65 @@ class Sample:
         #사진에서 발견된 얼굴이 없어 인코딩이 없다면 아무것도 추출되지 않을 것.
         else:
             return None
-    
-#dongyoung_image = face_recognition.load_image_file("dongyoung.jpg")
-#dongyoung_face_encoding = face_recognition.face_encodings(dongyoung_image)[0] #위의 카메라 인덱스와는 별개의 인코딩값. 이것도 인식하는 사진이 많아질수록 숫자가 늘어남.
+        
+
+a = SampleImage('dongyoung.jpg')
+
+known_face_encodings = [
+    a.face_encodings
+]
+
+face_locations = [] 
+face_encodings = [] # 위에서 작업된 인코딩 리스트
+face_names = [] #인코딩마다 붙여진 이름 리스트
+process_this_frame = True
+
+while True:
+    #Grab a single frame of video
+    ret, frame = videofile.read()
+
+    if process_this_frame:
+        small_frame = cv2.resize(frame, (0,0), fx=0.25, fy=0.25)
+
+        rgb_small_frame = small_frame[:, :, ::-1]
+
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+
+        face_names = []
+        for face_encoding in face_encodings:
+
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+            name = "unknown"
+
+            face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+            best_match_index = np.argmin(face_distances)
+            if matches[best_match_index]:
+                name = a[best_match_index]
+
+            face_names.append(name)
+
+        process_this_frame = not process_this_frame
+            
+        for (top, right, bottom, left), name in zip(face_locations, face_names):
+            top *= 4
+            right *= 4
+            bottom *= 4
+            left *= 4
+
+        cv2.rectangle(frame, (left, top), (right, bottom), (0,0,255), 2)
+
+        cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0,0,255), cv2.FILLED)
+        font = cv2.FONT_HERSHEY_DUPLEX
+        cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+
+        cv2.imshow('Video', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+videofile.release()
+cv2.destroyAllWindows()
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-#여기는 그냥 공식 문서 보면서 처음에 적어뒀던 것들. 참고하면서 작성함.
-
-#사진에서 얼굴 찾기
-image = face_recognition.load_image_file("caimage.jpg") #임의로 정한 사진 이름
-face_locations = face_recognition.face_locations(image)
-
-#사진에서 얼굴의 특징을 찾기
-#import face_recognition
-image=face_recognition.load_image_file("camimage.jpg")
-
-#사진 속 얼굴의 신원 확인하기
-#import face_recognition
-known_image = face_recognition.load_image_file("camimage.jpg") #이미 확인된 얼굴사진 (미리 학습이 필요.)
-unknown_image = face_recognition.load_image_file("unknowncamimage.jpg") #앞으로 확인할(인식할) 얼굴사진
-
-biden_encoding = face_recognition.face_encodings(known_image)[0]
-unknown_encoding = face_recognition.face_encodings(unknown_image)[0]
-
-results = face_recognition.compare_faces([biden_encoding], unknown_encoding)
